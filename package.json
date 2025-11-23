@@ -5,7 +5,8 @@
   "private": true,
   "workspaces": [
     "crates/ruvector-node",
-    "crates/ruvector-wasm"
+    "crates/ruvector-wasm",
+    "packages/*"
   ],
   "scripts": {
     "build": "cargo build --release",
