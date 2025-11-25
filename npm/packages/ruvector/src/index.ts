@@ -13,7 +13,7 @@ let implementationType: 'native' | 'wasm' = 'wasm';
 
 try {
   // Try to load native module first
-  implementation = require('ruvector-core');
+  implementation = require('@ruvector/core');
   implementationType = 'native';
 
   // Verify it's actually working
