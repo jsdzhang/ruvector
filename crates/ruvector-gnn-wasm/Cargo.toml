@@ -6,13 +6,14 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
+readme = "README.md"
 description = "WebAssembly bindings for RuVector GNN with tensor compression and differentiable search"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-ruvector-gnn = { path = "../ruvector-gnn", default-features = false, features = ["wasm"] }
+ruvector-gnn = { version = "0.1.2", path = "../ruvector-gnn", default-features = false, features = ["wasm"] }
 
 # WASM
 wasm-bindgen = { workspace = true }

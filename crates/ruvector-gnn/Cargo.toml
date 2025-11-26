@@ -6,11 +6,12 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
+readme = "README.md"
 description = "Graph Neural Network layer for Ruvector on HNSW topology"
 
 [dependencies]
 # Core
-ruvector-core = { path = "../ruvector-core", default-features = false }
+ruvector-core = { version = "0.1.2", path = "../ruvector-core", default-features = false }
 
 # Math and numerics
 ndarray = { workspace = true, features = ["serde"] }

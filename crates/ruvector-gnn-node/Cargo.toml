@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
+readme = "README.md"
 description = "Node.js bindings for Ruvector GNN via NAPI-RS"
 
 [lib]
@@ -14,7 +15,7 @@ crate-type = ["cdylib"]
 [dependencies]
 napi = { workspace = true }
 napi-derive = { workspace = true }
-ruvector-gnn = { path = "../ruvector-gnn", default-features = false }
+ruvector-gnn = { version = "0.1.2", path = "../ruvector-gnn", default-features = false }
 serde_json = { workspace = true }
 
 [build-dependencies]
