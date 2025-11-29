@@ -3,7 +3,7 @@
 use crate::causal::CausalGraph;
 use crate::long_term::LongTermStore;
 use crate::short_term::ShortTermBuffer;
-use crate::types::{Pattern, SubstrateTime};
+use crate::types::{TemporalPattern, SubstrateTime};
 
 /// Consolidation configuration
 #[derive(Debug, Clone)]
@@ -34,7 +34,7 @@ impl Default for ConsolidationConfig {
 
 /// Compute salience score for a pattern
 pub fn compute_salience(
-    pattern: &Pattern,
+    temporal_pattern: &TemporalPattern,
     causal_graph: &CausalGraph,
     long_term: &LongTermStore,
     config: &ConsolidationConfig,
@@ -42,19 +42,19 @@ pub fn compute_salience(
     let now = SubstrateTime::now();
 
     // 1. Access frequency (normalized)
-    let access_freq = (pattern.access_count as f32).ln_1p() / 10.0;
+    let access_freq = (temporal_pattern.access_count as f32).ln_1p() / 10.0;
 
     // 2. Recency (exponential decay)
-    let time_since_access = now.duration_since(&pattern.last_accessed);
-    let seconds_since = time_since_access.num_seconds().max(1) as f32;
+    let time_diff = (now - temporal_pattern.last_accessed).abs();
+    let seconds_since = (time_diff.0 / 1_000_000_000).max(1) as f32; // Convert nanoseconds to seconds
     let recency = 1.0 / (1.0 + seconds_since / 3600.0); // Decay over hours
 
     // 3. Causal importance (out-degree in causal graph)
-    let causal_importance = causal_graph.out_degree(pattern.id) as f32;
+    let causal_importance = causal_graph.out_degree(temporal_pattern.pattern.id) as f32;
     let causal_score = (causal_importance.ln_1p()) / 5.0;
 
     // 4. Surprise (deviation from expected)
-    let surprise = compute_surprise(pattern, long_term);
+    let surprise = compute_surprise(&temporal_pattern.pattern, long_term);
 
     // Weighted combination
     let salience = config.w_frequency * access_freq
@@ -67,7 +67,7 @@ pub fn compute_salience(
 }
 
 /// Compute surprise score (how unexpected this pattern is)
-fn compute_surprise(pattern: &Pattern, long_term: &LongTermStore) -> f32 {
+fn compute_surprise(pattern: &exo_core::Pattern, long_term: &LongTermStore) -> f32 {
     // Simple surprise metric: inverse of similarity to nearest neighbor
     if long_term.is_empty() {
         return 1.0; // Everything is surprising if long-term is empty
@@ -77,7 +77,7 @@ fn compute_surprise(pattern: &Pattern, long_term: &LongTermStore) -> f32 {
     let mut max_similarity = 0.0f32;
 
     for existing in long_term.all() {
-        let sim = cosine_similarity(&pattern.embedding, &existing.embedding);
+        let sim = cosine_similarity(&pattern.embedding, &existing.pattern.embedding);
         max_similarity = max_similarity.max(sim);
     }
 
@@ -98,14 +98,14 @@ pub fn consolidate(
     // Drain all patterns from short-term
     let patterns = short_term.drain();
 
-    for mut pattern in patterns {
+    for mut temporal_pattern in patterns {
         // Compute salience
-        let salience = compute_salience(&pattern, causal_graph, long_term, config);
-        pattern.salience = salience;
+        let salience = compute_salience(&temporal_pattern, causal_graph, long_term, config);
+        temporal_pattern.pattern.salience = salience;
 
         // Consolidate if above threshold
         if salience >= config.salience_threshold {
-            long_term.integrate(pattern);
+            long_term.integrate(temporal_pattern);
             num_consolidated += 1;
         } else {
             // Forget (don't integrate)
@@ -156,10 +156,10 @@ mod tests {
         let long_term = LongTermStore::default();
         let config = ConsolidationConfig::default();
 
-        let mut pattern = Pattern::new(vec![1.0, 2.0, 3.0], Metadata::new());
-        pattern.access_count = 10;
+        let mut temporal_pattern = TemporalPattern::from_embedding(vec![1.0, 2.0, 3.0], Metadata::new());
+        temporal_pattern.access_count = 10;
 
-        let salience = compute_salience(&pattern, &causal_graph, &long_term, &config);
+        let salience = compute_salience(&temporal_pattern, &causal_graph, &long_term, &config);
 
         assert!(salience >= 0.0 && salience <= 1.0);
     }
@@ -172,12 +172,12 @@ mod tests {
         let config = ConsolidationConfig::default();
 
         // Add high-salience pattern
-        let mut p1 = Pattern::new(vec![1.0, 0.0, 0.0], Metadata::new());
+        let mut p1 = TemporalPattern::from_embedding(vec![1.0, 0.0, 0.0], Metadata::new());
         p1.access_count = 100; // High access count
         short_term.insert(p1);
 
         // Add low-salience pattern
-        let p2 = Pattern::new(vec![0.0, 1.0, 0.0], Metadata::new());
+        let p2 = TemporalPattern::from_embedding(vec![0.0, 1.0, 0.0], Metadata::new());
         short_term.insert(p2);
 
         let result = consolidate(&short_term, &long_term, &causal_graph, &config);

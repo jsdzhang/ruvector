@@ -18,10 +18,13 @@ pub struct VectorIndexWrapper {
 impl VectorIndexWrapper {
     /// Create a new vector index wrapper
     pub fn new(dimensions: usize, distance_metric: DistanceMetric) -> Result<Self, ruvector_core::RuvectorError> {
+        // Use a temporary file path for in-memory like behavior
+        let temp_path = std::env::temp_dir().join(format!("exo_vector_{}.db", uuid::Uuid::new_v4()));
+
         let options = DbOptions {
             dimensions,
             distance_metric,
-            storage_path: ":memory:".to_string(),
+            storage_path: temp_path.to_string_lossy().to_string(),
             hnsw_config: Some(HnswConfig::default()),
             quantization: None,
         };

@@ -1,13 +1,16 @@
 //! Graph database wrapper for ruvector-graph
 
 use exo_core::{
-    EntityId, HyperedgeId, HyperedgeResult, Relation, RelationType, SheafConsistencyResult,
+    EntityId, HyperedgeId, HyperedgeResult, Relation, SheafConsistencyResult,
     TopologicalQuery,
 };
-use ruvector_graph::{GraphDB, Hyperedge, Node, NodeBuilder};
+use ruvector_graph::{GraphDB, Hyperedge, Node};
 use std::str::FromStr;
 
 use exo_core::{Error as ExoError, Result as ExoResult};
+
+#[cfg(test)]
+use exo_core::RelationType;
 
 /// Wrapper around ruvector GraphDB
 pub struct GraphWrapper {

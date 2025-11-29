@@ -10,7 +10,7 @@ pub mod graph;
 pub mod vector;
 
 use exo_core::{
-    Error as ExoError, Filter, ManifoldDelta, Pattern, PatternId, Result as ExoResult,
+    Error as ExoError, Filter, ManifoldDelta, Pattern, Result as ExoResult,
     SearchResult, SubstrateBackend,
 };
 use parking_lot::RwLock;

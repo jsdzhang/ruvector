@@ -153,8 +153,11 @@ impl TemporalMemory {
         let id = pattern.id;
         let timestamp = pattern.timestamp;
 
+        // Wrap in TemporalPattern
+        let temporal_pattern = TemporalPattern::new(pattern);
+
         // Add to short-term buffer
-        self.short_term.insert(pattern);
+        self.short_term.insert(temporal_pattern);
 
         // Record causal relationships
         self.causal_graph.add_pattern(id, timestamp);
@@ -173,12 +176,12 @@ impl TemporalMemory {
     /// Retrieve pattern by ID
     pub fn get(&self, id: &PatternId) -> Option<Pattern> {
         // Check short-term first
-        if let Some(pattern) = self.short_term.get(id) {
-            return Some(pattern);
+        if let Some(temporal_pattern) = self.short_term.get(id) {
+            return Some(temporal_pattern.pattern);
         }
 
         // Check long-term
-        self.long_term.get(id)
+        self.long_term.get(id).map(|tp| tp.pattern)
     }
 
     /// Update pattern access tracking
@@ -187,9 +190,9 @@ impl TemporalMemory {
         self.short_term.get_mut(id, |p| p.mark_accessed());
 
         // Update in long-term if present
-        if let Some(mut pattern) = self.long_term.get(id) {
-            pattern.mark_accessed();
-            self.long_term.update(pattern);
+        if let Some(mut temporal_pattern) = self.long_term.get(id) {
+            temporal_pattern.mark_accessed();
+            self.long_term.update(temporal_pattern);
         }
     }
 
@@ -218,25 +221,26 @@ impl TemporalMemory {
         let mut results = Vec::new();
 
         for search_result in search_results {
-            let pattern = search_result.pattern;
+            let temporal_pattern = search_result.pattern;
             let similarity = search_result.score;
 
             // Causal distance
             let causal_distance = if let Some(origin) = query.origin {
-                self.causal_graph.distance(origin, pattern.id)
+                self.causal_graph.distance(origin, temporal_pattern.id())
             } else {
                 None
             };
 
-            // Temporal distance
-            let temporal_distance = reference_time.abs_diff(&pattern.timestamp);
+            // Temporal distance (in nanoseconds)
+            let time_diff = (reference_time - temporal_pattern.pattern.timestamp).abs();
+            let temporal_distance_ns = time_diff.0;
 
             // Combined score (weighted combination)
             const ALPHA: f32 = 0.5; // Similarity weight
             const BETA: f32 = 0.25; // Temporal weight
             const GAMMA: f32 = 0.25; // Causal weight
 
-            let temporal_score = 1.0 / (1.0 + temporal_distance.num_seconds().abs() as f32);
+            let temporal_score = 1.0 / (1.0 + (temporal_distance_ns / 1_000_000_000) as f32); // Convert to seconds
             let causal_score = if let Some(dist) = causal_distance {
                 1.0 / (1.0 + dist as f32)
             } else {
@@ -246,10 +250,10 @@ impl TemporalMemory {
             let combined_score = ALPHA * similarity + BETA * temporal_score + GAMMA * causal_score;
 
             results.push(CausalResult {
-                pattern,
+                pattern: temporal_pattern,
                 similarity,
                 causal_distance,
-                temporal_distance,
+                temporal_distance_ns,
                 combined_score,
             });
         }
@@ -344,7 +348,14 @@ mod tests {
     fn test_temporal_memory() {
         let memory = TemporalMemory::default();
 
-        let pattern = Pattern::new(vec![1.0, 2.0, 3.0], Metadata::new());
+        let pattern = Pattern {
+            id: PatternId::new(),
+            embedding: vec![1.0, 2.0, 3.0],
+            metadata: Metadata::default(),
+            timestamp: SubstrateTime::now(),
+            antecedents: Vec::new(),
+            salience: 1.0,
+        };
         let id = pattern.id;
 
         memory.store(pattern, &[]).unwrap();
@@ -357,15 +368,36 @@ mod tests {
         let memory = TemporalMemory::default();
 
         // Create causal chain: p1 -> p2 -> p3
-        let p1 = Pattern::new(vec![1.0, 0.0, 0.0], Metadata::new());
+        let p1 = Pattern {
+            id: PatternId::new(),
+            embedding: vec![1.0, 0.0, 0.0],
+            metadata: Metadata::default(),
+            timestamp: SubstrateTime::now(),
+            antecedents: Vec::new(),
+            salience: 1.0,
+        };
         let id1 = p1.id;
         memory.store(p1, &[]).unwrap();
 
-        let p2 = Pattern::new(vec![0.9, 0.1, 0.0], Metadata::new());
+        let p2 = Pattern {
+            id: PatternId::new(),
+            embedding: vec![0.9, 0.1, 0.0],
+            metadata: Metadata::default(),
+            timestamp: SubstrateTime::now(),
+            antecedents: Vec::new(),
+            salience: 1.0,
+        };
         let id2 = p2.id;
         memory.store(p2, &[id1]).unwrap();
 
-        let p3 = Pattern::new(vec![0.8, 0.2, 0.0], Metadata::new());
+        let p3 = Pattern {
+            id: PatternId::new(),
+            embedding: vec![0.8, 0.2, 0.0],
+            metadata: Metadata::default(),
+            timestamp: SubstrateTime::now(),
+            antecedents: Vec::new(),
+            salience: 1.0,
+        };
         memory.store(p3, &[id2]).unwrap();
 
         // Consolidate to long-term

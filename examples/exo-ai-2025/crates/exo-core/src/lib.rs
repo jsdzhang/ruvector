@@ -3,6 +3,16 @@
 //! This crate provides the foundational abstractions that all other EXO-AI
 //! crates build upon, including backend traits, pattern representations,
 //! and core error types.
+//!
+//! # Theoretical Framework Modules
+//!
+//! - [`consciousness`]: Integrated Information Theory (IIT 4.0) implementation
+//!   for computing Φ (phi) - the measure of integrated information
+//! - [`thermodynamics`]: Landauer's Principle tracking for measuring
+//!   computational efficiency relative to fundamental physics limits
+
+pub mod consciousness;
+pub mod thermodynamics;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -80,6 +90,26 @@ impl std::ops::Sub for SubstrateTime {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Metadata {
     pub fields: HashMap<String, MetadataValue>,
+}
+
+impl Metadata {
+    /// Create empty metadata
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Create metadata with a single field
+    pub fn with_field(key: impl Into<String>, value: MetadataValue) -> Self {
+        let mut fields = HashMap::new();
+        fields.insert(key.into(), value);
+        Self { fields }
+    }
+
+    /// Add a field
+    pub fn insert(&mut self, key: impl Into<String>, value: MetadataValue) -> &mut Self {
+        self.fields.insert(key.into(), value);
+        self
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

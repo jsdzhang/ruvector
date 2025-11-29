@@ -1,27 +1,25 @@
 //! Learned Manifold Engine for EXO-AI Cognitive Substrate
 //!
-//! This crate implements continuous manifold storage using implicit neural
-//! representations (SIREN networks). Instead of discrete vector storage,
-//! memories are encoded as continuous functions on a learned manifold.
+//! This crate implements a simplified manifold storage system.
+//! The burn dependency has been removed to avoid bincode version conflicts.
 //!
 //! # Key Concepts
 //!
-//! - **Retrieval**: Gradient descent toward high-relevance regions
-//! - **Storage**: Continuous deformation of the manifold (no discrete insert)
-//! - **Forgetting**: Strategic manifold smoothing in low-salience regions
+//! - **Retrieval**: Vector similarity search
+//! - **Storage**: Pattern storage with embeddings
+//! - **Forgetting**: Strategic pattern pruning
 //!
 //! # Architecture
 //!
 //! ```text
-//! Query → Gradient Descent → Converged Position → Extract Patterns
+//! Query → Vector Search → Nearest Patterns
 //!            ↓
-//!      SIREN Network
-//!      (Learned Manifold)
+//!      Pattern Storage
+//!      (Vec-based)
 //!            ↓
-//!      Relevance Field
+//!      Similarity Scores
 //! ```
 
-use burn::prelude::*;
 use exo_core::{Error, ManifoldConfig, ManifoldDelta, Pattern, Result, SearchResult};
 use parking_lot::RwLock;
 use std::sync::Arc;
@@ -31,48 +29,38 @@ mod retrieval;
 mod deformation;
 mod forgetting;
 
-pub use network::{LearnedManifold, SirenLayer};
+pub use network::LearnedManifold;
 pub use retrieval::GradientDescentRetriever;
 pub use deformation::ManifoldDeformer;
 pub use forgetting::StrategicForgetting;
 
-/// Implicit Neural Representation for manifold storage
-pub struct ManifoldEngine<B: Backend> {
-    /// Neural network representing the manifold
-    network: Arc<RwLock<LearnedManifold<B>>>,
+/// Simplified manifold storage using vector similarity
+pub struct ManifoldEngine {
+    /// Simple pattern storage
+    network: Arc<RwLock<LearnedManifold>>,
     /// Configuration
     config: ManifoldConfig,
-    /// Device for computation
-    device: B::Device,
     /// Stored patterns (for extraction)
     patterns: Arc<RwLock<Vec<Pattern>>>,
 }
 
-impl<B: Backend> ManifoldEngine<B> {
+impl ManifoldEngine {
     /// Create a new manifold engine
-    pub fn new(config: ManifoldConfig, device: B::Device) -> Self {
+    pub fn new(config: ManifoldConfig) -> Self {
         let network = LearnedManifold::new(
             config.dimension,
             config.hidden_dim,
             config.hidden_layers,
-            config.omega_0,
-            &device,
         );
 
         Self {
             network: Arc::new(RwLock::new(network)),
             config,
-            device,
             patterns: Arc::new(RwLock::new(Vec::new())),
         }
     }
 
-    /// Query manifold via gradient descent
-    ///
-    /// Implements the ManifoldRetrieve algorithm from pseudocode:
-    /// - Initialize at query position
-    /// - Gradient descent toward high-relevance regions
-    /// - Extract patterns from converged region
+    /// Query manifold via vector similarity
     pub fn retrieve(&self, query: &[f32], k: usize) -> Result<Vec<SearchResult>> {
         if query.len() != self.config.dimension {
             return Err(Error::InvalidDimension {
@@ -84,18 +72,12 @@ impl<B: Backend> ManifoldEngine<B> {
         let retriever = GradientDescentRetriever::new(
             self.network.clone(),
             self.config.clone(),
-            self.device.clone(),
         );
 
         retriever.retrieve(query, k, &self.patterns)
     }
 
-    /// Continuous manifold deformation (replaces insert)
-    ///
-    /// Implements the ManifoldDeform algorithm from pseudocode:
-    /// - No discrete insert operation
-    /// - Continuous gradient update to manifold weights
-    /// - Deformation proportional to salience
+    /// Store pattern (simplified deformation)
     pub fn deform(&mut self, pattern: Pattern, salience: f32) -> Result<ManifoldDelta> {
         if pattern.embedding.len() != self.config.dimension {
             return Err(Error::InvalidDimension {
@@ -110,23 +92,14 @@ impl<B: Backend> ManifoldEngine<B> {
         let mut deformer = ManifoldDeformer::new(
             self.network.clone(),
             self.config.learning_rate,
-            self.device.clone(),
         );
 
         deformer.deform(&pattern, salience)
     }
 
-    /// Strategic forgetting via manifold smoothing
-    ///
-    /// Implements the StrategicForget algorithm from pseudocode:
-    /// - Identify low-salience regions
-    /// - Apply smoothing kernel to reduce specificity
-    /// - Prune near-zero weights
+    /// Strategic forgetting via pattern pruning
     pub fn forget(&mut self, salience_threshold: f32, decay_rate: f32) -> Result<usize> {
-        let forgetter = StrategicForgetting::new(
-            self.network.clone(),
-            self.device.clone(),
-        );
+        let forgetter = StrategicForgetting::new(self.network.clone());
 
         forgetter.forget(
             &self.patterns,
@@ -154,10 +127,7 @@ impl<B: Backend> ManifoldEngine<B> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use burn::backend::NdArray;
     use exo_core::{Metadata, PatternId, SubstrateTime};
-
-    type TestBackend = NdArray;
 
     fn create_test_pattern(embedding: Vec<f32>, salience: f32) -> Pattern {
         Pattern {
@@ -176,8 +146,7 @@ mod tests {
             dimension: 128,
             ..Default::default()
         };
-        let device = Default::default();
-        let engine = ManifoldEngine::<TestBackend>::new(config, device);
+        let engine = ManifoldEngine::new(config);
 
         assert_eq!(engine.len(), 0);
         assert!(engine.is_empty());
@@ -192,8 +161,7 @@ mod tests {
             learning_rate: 0.01,
             ..Default::default()
         };
-        let device = Default::default();
-        let mut engine = ManifoldEngine::<TestBackend>::new(config, device);
+        let mut engine = ManifoldEngine::new(config);
 
         // Create and deform with a pattern
         let embedding = vec![1.0; 64];
@@ -214,8 +182,7 @@ mod tests {
             dimension: 128,
             ..Default::default()
         };
-        let device = Default::default();
-        let mut engine = ManifoldEngine::<TestBackend>::new(config, device);
+        let mut engine = ManifoldEngine::new(config);
 
         // Wrong dimension
         let embedding = vec![1.0; 64];

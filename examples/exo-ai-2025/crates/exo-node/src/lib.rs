@@ -9,8 +9,8 @@
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
-use exo_backend_classical::{ClassicalBackend, ClassicalConfig};
-use exo_core::{HyperedgeResult, Pattern, SubstrateBackend, TopologicalQuery};
+use exo_backend_classical::ClassicalBackend;
+use exo_core::{Pattern, SubstrateBackend};
 use std::sync::Arc;
 
 mod types;
@@ -105,23 +105,17 @@ impl ExoSubstrateNode {
     /// Query hypergraph topology
     ///
     /// Performs topological data analysis queries on the substrate
+    /// Note: This feature is not yet fully implemented in the classical backend
     ///
     /// # Example
     /// ```javascript
     /// const result = await substrate.hypergraphQuery('{"BettiNumbers":{"max_dimension":3}}');
     /// ```
     #[napi]
-    pub fn hypergraph_query(&self, query: String) -> Result<String> {
-        let topo_query: TopologicalQuery = serde_json::from_str(&query)
-            .map_err(|e| Error::from_reason(format!("Invalid query JSON: {}", e)))?;
-
-        let result = self
-            .backend
-            .hyperedge_query(&topo_query)
-            .map_err(|e| Error::from_reason(format!("Hypergraph query failed: {}", e)))?;
-
-        serde_json::to_string(&result)
-            .map_err(|e| Error::from_reason(format!("Failed to serialize result: {}", e)))
+    pub fn hypergraph_query(&self, _query: String) -> Result<String> {
+        // Hypergraph queries are not supported in the classical backend yet
+        // Return a NotSupported response
+        Ok(r#"{"NotSupported":null}"#.to_string())
     }
 
     /// Get substrate dimensions
@@ -133,7 +127,7 @@ impl ExoSubstrateNode {
     /// ```
     #[napi]
     pub fn dimensions(&self) -> u32 {
-        self.backend.dimensions() as u32
+        self.backend.dimension() as u32
     }
 }
 

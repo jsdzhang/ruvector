@@ -235,7 +235,7 @@ impl CausalGraph {
     fn is_in_light_cone(
         &self,
         pattern: PatternId,
-        reference: PatternId,
+        _reference: PatternId,
         reference_time: SubstrateTime,
         cone_type: CausalConeType,
     ) -> bool {
@@ -247,11 +247,11 @@ impl CausalGraph {
         match cone_type {
             CausalConeType::Past => pattern_time <= reference_time,
             CausalConeType::Future => pattern_time >= reference_time,
-            CausalConeType::LightCone { velocity } => {
+            CausalConeType::LightCone { velocity: _ } => {
                 // Simplified relativistic constraint
                 // In full implementation, would include spatial distance
-                let time_diff = reference_time.abs_diff(&pattern_time);
-                let time_diff_secs = time_diff.num_seconds().abs() as f32;
+                let time_diff = (reference_time - pattern_time).abs();
+                let time_diff_secs = (time_diff.0 / 1_000_000_000).abs() as f32;
 
                 // For now, just use temporal constraint
                 // In full version: spatial_distance <= velocity * time_diff

@@ -2,7 +2,7 @@
 
 use crate::causal::CausalGraph;
 use crate::long_term::LongTermStore;
-use crate::types::{Pattern, PatternId, Query, SearchResult};
+use crate::types::{PatternId, Query, SearchResult};
 use dashmap::DashMap;
 use parking_lot::RwLock;
 use std::collections::VecDeque;
@@ -186,9 +186,9 @@ pub fn anticipate(
                     let predicted = sequential_tracker.predict_next(last, 5);
 
                     for pattern_id in predicted {
-                        if let Some(pattern) = long_term.get(&pattern_id) {
+                        if let Some(temporal_pattern) = long_term.get(&pattern_id) {
                             // Create query from pattern
-                            let query = Query::from_embedding(pattern.embedding.clone());
+                            let query = Query::from_embedding(temporal_pattern.pattern.embedding.clone());
                             let query_hash = query.hash();
 
                             // Pre-fetch if not cached
@@ -213,8 +213,8 @@ pub fn anticipate(
                 let downstream = causal_graph.causal_future(*context);
 
                 for pattern_id in downstream.into_iter().take(5) {
-                    if let Some(pattern) = long_term.get(&pattern_id) {
-                        let query = Query::from_embedding(pattern.embedding.clone());
+                    if let Some(temporal_pattern) = long_term.get(&pattern_id) {
+                        let query = Query::from_embedding(temporal_pattern.pattern.embedding.clone());
                         let query_hash = query.hash();
 
                         // Pre-fetch if not cached

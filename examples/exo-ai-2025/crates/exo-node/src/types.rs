@@ -1,7 +1,7 @@
 //! Node.js-compatible type definitions
 
 use exo_core::{
-    HyperedgeResult, Metadata, MetadataValue, Pattern, PatternId, SearchResult, SubstrateTime,
+    Metadata, MetadataValue, Pattern, PatternId, SearchResult, SubstrateTime,
 };
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 /// Pattern for Node.js
 #[napi(object)]
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct JsPattern {
     /// Vector embedding as Float32Array
     pub embedding: Float32Array,

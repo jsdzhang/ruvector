@@ -1,6 +1,6 @@
 //! Long-term consolidated memory store
 
-use crate::types::{Pattern, PatternId, Query, SearchResult, SubstrateTime, TimeRange};
+use crate::types::{TemporalPattern, PatternId, Query, SearchResult, SubstrateTime, TimeRange};
 use dashmap::DashMap;
 use parking_lot::RwLock;
 use std::sync::Arc;
@@ -26,7 +26,7 @@ impl Default for LongTermConfig {
 /// Long-term consolidated memory store
 pub struct LongTermStore {
     /// Pattern storage
-    patterns: DashMap<PatternId, Pattern>,
+    patterns: DashMap<PatternId, TemporalPattern>,
     /// Temporal index (sorted by timestamp)
     temporal_index: Arc<RwLock<Vec<(SubstrateTime, PatternId)>>>,
     /// Configuration
@@ -44,12 +44,12 @@ impl LongTermStore {
     }
 
     /// Integrate pattern from consolidation
-    pub fn integrate(&self, pattern: Pattern) {
-        let id = pattern.id;
-        let timestamp = pattern.timestamp;
+    pub fn integrate(&self, temporal_pattern: TemporalPattern) {
+        let id = temporal_pattern.pattern.id;
+        let timestamp = temporal_pattern.pattern.timestamp;
 
         // Store pattern
-        self.patterns.insert(id, pattern);
+        self.patterns.insert(id, temporal_pattern);
 
         // Update temporal index
         let mut index = self.temporal_index.write();
@@ -58,14 +58,14 @@ impl LongTermStore {
     }
 
     /// Get pattern by ID
-    pub fn get(&self, id: &PatternId) -> Option<Pattern> {
+    pub fn get(&self, id: &PatternId) -> Option<TemporalPattern> {
         self.patterns.get(id).map(|p| p.clone())
     }
 
     /// Update pattern
-    pub fn update(&self, pattern: Pattern) -> bool {
-        let id = pattern.id;
-        self.patterns.insert(id, pattern).is_some()
+    pub fn update(&self, temporal_pattern: TemporalPattern) -> bool {
+        let id = temporal_pattern.pattern.id;
+        self.patterns.insert(id, temporal_pattern).is_some()
     }
 
     /// Search by embedding similarity
@@ -73,12 +73,12 @@ impl LongTermStore {
         let mut results = Vec::new();
 
         for entry in self.patterns.iter() {
-            let pattern = entry.value();
-            let score = cosine_similarity(&query.embedding, &pattern.embedding);
+            let temporal_pattern = entry.value();
+            let score = cosine_similarity(&query.embedding, &temporal_pattern.pattern.embedding);
 
             results.push(SearchResult {
-                id: pattern.id,
-                pattern: pattern.clone(),
+                id: temporal_pattern.pattern.id,
+                pattern: temporal_pattern.clone(),
                 score,
             });
         }
@@ -97,18 +97,18 @@ impl LongTermStore {
         let mut results = Vec::new();
 
         for entry in self.patterns.iter() {
-            let pattern = entry.value();
+            let temporal_pattern = entry.value();
 
             // Filter by time range
-            if !time_range.contains(&pattern.timestamp) {
+            if !time_range.contains(&temporal_pattern.pattern.timestamp) {
                 continue;
             }
 
-            let score = cosine_similarity(&query.embedding, &pattern.embedding);
+            let score = cosine_similarity(&query.embedding, &temporal_pattern.pattern.embedding);
 
             results.push(SearchResult {
-                id: pattern.id,
-                pattern: pattern.clone(),
+                id: temporal_pattern.pattern.id,
+                pattern: temporal_pattern.clone(),
                 score,
             });
         }
@@ -123,7 +123,7 @@ impl LongTermStore {
     }
 
     /// Filter patterns by time range
-    pub fn filter_by_time(&self, time_range: TimeRange) -> Vec<Pattern> {
+    pub fn filter_by_time(&self, time_range: TimeRange) -> Vec<TemporalPattern> {
         let index = self.temporal_index.read();
 
         // Binary search for start
@@ -148,14 +148,14 @@ impl LongTermStore {
         let mut to_remove = Vec::new();
 
         for mut entry in self.patterns.iter_mut() {
-            let pattern = entry.value_mut();
+            let temporal_pattern = entry.value_mut();
 
             // Decay salience
-            pattern.salience *= 1.0 - decay_rate;
+            temporal_pattern.pattern.salience *= 1.0 - decay_rate;
 
             // Mark for removal if below threshold
-            if pattern.salience < self.config.min_salience {
-                to_remove.push(pattern.id);
+            if temporal_pattern.pattern.salience < self.config.min_salience {
+                to_remove.push(temporal_pattern.pattern.id);
             }
         }
 
@@ -166,15 +166,15 @@ impl LongTermStore {
     }
 
     /// Remove pattern
-    pub fn remove(&self, id: &PatternId) -> Option<Pattern> {
+    pub fn remove(&self, id: &PatternId) -> Option<TemporalPattern> {
         // Remove from storage
-        let pattern = self.patterns.remove(id).map(|(_, p)| p)?;
+        let temporal_pattern = self.patterns.remove(id).map(|(_, p)| p)?;
 
         // Remove from temporal index
         let mut index = self.temporal_index.write();
         index.retain(|(_, pid)| pid != id);
 
-        Some(pattern)
+        Some(temporal_pattern)
     }
 
     /// Get total number of patterns
@@ -194,7 +194,7 @@ impl LongTermStore {
     }
 
     /// Get all patterns
-    pub fn all(&self) -> Vec<Pattern> {
+    pub fn all(&self) -> Vec<TemporalPattern> {
         self.patterns.iter().map(|e| e.value().clone()).collect()
     }
 
@@ -203,7 +203,7 @@ impl LongTermStore {
         let size = self.patterns.len();
 
         // Compute average salience
-        let total_salience: f32 = self.patterns.iter().map(|e| e.value().salience).sum();
+        let total_salience: f32 = self.patterns.iter().map(|e| e.value().pattern.salience).sum();
         let avg_salience = if size > 0 {
             total_salience / size as f32
         } else {
@@ -215,7 +215,7 @@ impl LongTermStore {
         let mut max_salience = f32::MIN;
 
         for entry in self.patterns.iter() {
-            let salience = entry.value().salience;
+            let salience = entry.value().pattern.salience;
             min_salience = min_salience.min(salience);
             max_salience = max_salience.max(salience);
         }
@@ -279,10 +279,10 @@ mod tests {
     fn test_long_term_store() {
         let store = LongTermStore::default();
 
-        let pattern = Pattern::new(vec![1.0, 2.0, 3.0], Metadata::new());
-        let id = pattern.id;
+        let temporal_pattern = TemporalPattern::from_embedding(vec![1.0, 2.0, 3.0], Metadata::new());
+        let id = temporal_pattern.pattern.id;
 
-        store.integrate(pattern);
+        store.integrate(temporal_pattern);
 
         assert_eq!(store.len(), 1);
         assert!(store.get(&id).is_some());
@@ -293,8 +293,8 @@ mod tests {
         let store = LongTermStore::default();
 
         // Add patterns
-        let p1 = Pattern::new(vec![1.0, 0.0, 0.0], Metadata::new());
-        let p2 = Pattern::new(vec![0.0, 1.0, 0.0], Metadata::new());
+        let p1 = TemporalPattern::from_embedding(vec![1.0, 0.0, 0.0], Metadata::new());
+        let p2 = TemporalPattern::from_embedding(vec![0.0, 1.0, 0.0], Metadata::new());
 
         store.integrate(p1);
         store.integrate(p2);
@@ -311,11 +311,11 @@ mod tests {
     fn test_decay() {
         let store = LongTermStore::default();
 
-        let mut pattern = Pattern::new(vec![1.0, 2.0, 3.0], Metadata::new());
-        pattern.salience = 0.15; // Just above minimum
-        let id = pattern.id;
+        let mut temporal_pattern = TemporalPattern::from_embedding(vec![1.0, 2.0, 3.0], Metadata::new());
+        temporal_pattern.pattern.salience = 0.15; // Just above minimum
+        let id = temporal_pattern.pattern.id;
 
-        store.integrate(pattern);
+        store.integrate(temporal_pattern);
         assert_eq!(store.len(), 1);
 
         // Decay should remove it
