@@ -204,3 +204,15 @@ path = "examples/snapshot_freeze.rs"
 [[example]]
 name = "live_boot_proof"
 path = "examples/live_boot_proof.rs"
+
+[[example]]
+name = "solver_witness"
+path = "examples/solver_witness.rs"
+
+[[example]]
+name = "sparse_matrix_store"
+path = "examples/sparse_matrix_store.rs"
+
+[[example]]
+name = "solver_benchmark"
+path = "examples/solver_benchmark.rs"

@@ -20,7 +20,6 @@
 use rvf_runtime::{
     MetadataEntry, MetadataValue, QueryOptions, RvfOptions, RvfStore, SearchResult,
 };
-use rvf_runtime::filter::FilterValue;
 use rvf_runtime::options::DistanceMetric;
 use rvf_crypto::{create_witness_chain, verify_witness_chain, shake256_256, WitnessEntry};
 use tempfile::TempDir;
